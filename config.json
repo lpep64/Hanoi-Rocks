@@ -1,0 +1,15 @@
+{
+  "simulation_parameters": {
+    "replications_per_combination": 10,
+    "max_moves_timeout_factor": 50,
+    "visualizer_enabled": false,
+    "visualizer_delay_ms": 100
+  },
+  "experimental_factors": {
+    "disk_count": [3, 5, 7, 9],
+    "target_alteration_percent": [0, 10, 20, 30],
+    "illegal_formation_handler": ["deepest", "bubble", "buffer"],
+    "ground_handler": ["best-fit", "first-available"],
+    "duplicate_handler": ["keep", "discard"]
+  }
+}

@@ -1,0 +1,564 @@
+---
+title: "Real-World Tower of Hanoi - Comprehensive Analysis"
+author: "Research Team"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10, fig.height = 6)
+
+# Load required libraries
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(gridExtra)
+library(car)  # For ANOVA diagnostics
+library(emmeans)  # For estimated marginal means
+library(interactions)  # For interaction plots
+```
+
+# Executive Summary
+
+This R Markdown document provides a comprehensive statistical analysis of the Real-World Tower of Hanoi experimental study. The experiment investigates how environmental alterations and different resolution strategies affect the solvability and efficiency of the classic Tower of Hanoi problem.
+
+## Research Questions
+
+1. How does disk count (Factor A) affect solvability and moves required?
+2. How does alteration rate (Factor B) impact performance?
+3. Which illegal formation handler (Factor C) is most effective?
+4. Which ground handler (Factor D) minimizes moves?
+5. Which duplicate handler (Factor E) performs better?
+6. What interactions exist between factors?
+
+---
+
+# Data Loading and Preparation
+
+```{r load_data}
+# Load the experimental results
+data <- read_csv("data/results.csv", col_types = cols(
+  run_id = col_character(),
+  run_timestamp = col_character(),
+  disk_count = col_integer(),
+  target_alteration_percent = col_integer(),
+  illegal_formation_handler = col_character(),
+  ground_handler = col_character(),
+  duplicate_handler = col_character(),
+  is_solvable = col_logical(),
+  total_moves_to_solve = col_integer(),
+  total_alterations = col_integer(),
+  total_illegal_states = col_integer(),
+  actual_alteration_percent = col_double(),
+  raw_move_log_path = col_character()
+))
+
+# Display first few rows
+head(data) %>%
+  kable(caption = "Sample of Raw Experimental Data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+```{r data_summary}
+# Basic data summary
+cat("Total number of simulation runs:", nrow(data), "\n")
+cat("Successful runs:", sum(data$is_solvable, na.rm = TRUE), "\n")
+cat("Failed runs:", sum(!data$is_solvable, na.rm = TRUE), "\n")
+cat("Success rate:", round(mean(data$is_solvable) * 100, 2), "%\n")
+```
+
+```{r factor_conversion}
+# Convert factors to factors (currently characters)
+data <- data %>%
+  mutate(
+    disk_count = factor(disk_count),
+    target_alteration_percent = factor(target_alteration_percent),
+    illegal_formation_handler = factor(illegal_formation_handler),
+    ground_handler = factor(ground_handler),
+    duplicate_handler = factor(duplicate_handler)
+  )
+
+# Create a filtered dataset with only solvable runs for move analysis
+data_solvable <- data %>% filter(is_solvable == TRUE)
+
+cat("Runs available for move analysis (solvable only):", nrow(data_solvable), "\n")
+```
+
+---
+
+# Descriptive Statistics
+
+## Factor Levels
+
+```{r factor_levels}
+# Display all factor levels
+factor_summary <- data.frame(
+  Factor = c("A - Disk Count", "B - Alteration %", "C - Formation Handler", 
+             "D - Ground Handler", "E - Duplicate Handler"),
+  Levels = c(
+    paste(levels(data$disk_count), collapse = ", "),
+    paste(levels(data$target_alteration_percent), collapse = ", "),
+    paste(levels(data$illegal_formation_handler), collapse = ", "),
+    paste(levels(data$ground_handler), collapse = ", "),
+    paste(levels(data$duplicate_handler), collapse = ", ")
+  )
+)
+
+factor_summary %>%
+  kable(caption = "Experimental Factors and Their Levels") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Success Rate by Factor
+
+```{r success_rate_by_factor}
+# Calculate success rate for each factor level
+success_by_disk <- data %>%
+  group_by(disk_count) %>%
+  summarise(
+    n = n(),
+    successes = sum(is_solvable),
+    success_rate = mean(is_solvable) * 100
+  )
+
+success_by_alteration <- data %>%
+  group_by(target_alteration_percent) %>%
+  summarise(
+    n = n(),
+    successes = sum(is_solvable),
+    success_rate = mean(is_solvable) * 100
+  )
+
+success_by_formation <- data %>%
+  group_by(illegal_formation_handler) %>%
+  summarise(
+    n = n(),
+    successes = sum(is_solvable),
+    success_rate = mean(is_solvable) * 100
+  )
+
+success_by_ground <- data %>%
+  group_by(ground_handler) %>%
+  summarise(
+    n = n(),
+    successes = sum(is_solvable),
+    success_rate = mean(is_solvable) * 100
+  )
+
+success_by_duplicate <- data %>%
+  group_by(duplicate_handler) %>%
+  summarise(
+    n = n(),
+    successes = sum(is_solvable),
+    success_rate = mean(is_solvable) * 100
+  )
+
+# Display tables
+success_by_disk %>%
+  kable(caption = "Success Rate by Disk Count", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+success_by_alteration %>%
+  kable(caption = "Success Rate by Alteration Percentage", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+success_by_formation %>%
+  kable(caption = "Success Rate by Formation Handler", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+success_by_ground %>%
+  kable(caption = "Success Rate by Ground Handler", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+success_by_duplicate %>%
+  kable(caption = "Success Rate by Duplicate Handler", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Moves Required by Factor (Solvable Runs Only)
+
+```{r moves_by_factor}
+# Calculate mean moves for solvable runs
+moves_by_disk <- data_solvable %>%
+  group_by(disk_count) %>%
+  summarise(
+    n = n(),
+    mean_moves = mean(total_moves_to_solve, na.rm = TRUE),
+    sd_moves = sd(total_moves_to_solve, na.rm = TRUE),
+    median_moves = median(total_moves_to_solve, na.rm = TRUE)
+  )
+
+moves_by_alteration <- data_solvable %>%
+  group_by(target_alteration_percent) %>%
+  summarise(
+    n = n(),
+    mean_moves = mean(total_moves_to_solve, na.rm = TRUE),
+    sd_moves = sd(total_moves_to_solve, na.rm = TRUE),
+    median_moves = median(total_moves_to_solve, na.rm = TRUE)
+  )
+
+moves_by_formation <- data_solvable %>%
+  group_by(illegal_formation_handler) %>%
+  summarise(
+    n = n(),
+    mean_moves = mean(total_moves_to_solve, na.rm = TRUE),
+    sd_moves = sd(total_moves_to_solve, na.rm = TRUE),
+    median_moves = median(total_moves_to_solve, na.rm = TRUE)
+  )
+
+# Display tables
+moves_by_disk %>%
+  kable(caption = "Moves Required by Disk Count", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+moves_by_alteration %>%
+  kable(caption = "Moves Required by Alteration Percentage", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+moves_by_formation %>%
+  kable(caption = "Moves Required by Formation Handler", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+---
+
+# Visualizations
+
+## Success Rate Visualizations
+
+```{r success_rate_plots, fig.height=8}
+p1 <- ggplot(success_by_disk, aes(x = disk_count, y = success_rate, fill = disk_count)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(success_rate, 1), "%")), vjust = -0.5) +
+  labs(title = "Success Rate by Disk Count", x = "Disk Count", y = "Success Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p2 <- ggplot(success_by_alteration, aes(x = target_alteration_percent, y = success_rate, fill = target_alteration_percent)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(success_rate, 1), "%")), vjust = -0.5) +
+  labs(title = "Success Rate by Alteration %", x = "Target Alteration %", y = "Success Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p3 <- ggplot(success_by_formation, aes(x = illegal_formation_handler, y = success_rate, fill = illegal_formation_handler)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(success_rate, 1), "%")), vjust = -0.5) +
+  labs(title = "Success Rate by Formation Handler", x = "Handler", y = "Success Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p4 <- ggplot(success_by_ground, aes(x = ground_handler, y = success_rate, fill = ground_handler)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(success_rate, 1), "%")), vjust = -0.5) +
+  labs(title = "Success Rate by Ground Handler", x = "Handler", y = "Success Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+## Moves Distribution
+
+```{r moves_distribution}
+ggplot(data_solvable, aes(x = total_moves_to_solve)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Total Moves (Solvable Runs)", 
+       x = "Total Moves", y = "Frequency") +
+  theme_minimal()
+```
+
+## Moves by Disk Count
+
+```{r moves_by_disk_boxplot}
+ggplot(data_solvable, aes(x = disk_count, y = total_moves_to_solve, fill = disk_count)) +
+  geom_boxplot() +
+  labs(title = "Moves Required by Disk Count", 
+       x = "Disk Count", y = "Total Moves") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## Moves by Alteration Rate
+
+```{r moves_by_alteration_boxplot}
+ggplot(data_solvable, aes(x = target_alteration_percent, y = total_moves_to_solve, fill = target_alteration_percent)) +
+  geom_boxplot() +
+  labs(title = "Moves Required by Alteration Percentage", 
+       x = "Target Alteration %", y = "Total Moves") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## Interaction Plot: Disk Count × Alteration Rate
+
+```{r interaction_disk_alteration}
+interaction_data <- data_solvable %>%
+  group_by(disk_count, target_alteration_percent) %>%
+  summarise(mean_moves = mean(total_moves_to_solve, na.rm = TRUE), .groups = "drop")
+
+ggplot(interaction_data, aes(x = target_alteration_percent, y = mean_moves, 
+                              color = disk_count, group = disk_count)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(title = "Interaction: Disk Count × Alteration Rate",
+       x = "Target Alteration %", y = "Mean Total Moves",
+       color = "Disk Count") +
+  theme_minimal()
+```
+
+## Illegal States Encountered
+
+```{r illegal_states}
+ggplot(data, aes(x = disk_count, y = total_illegal_states, fill = disk_count)) +
+  geom_boxplot() +
+  labs(title = "Illegal States Encountered by Disk Count", 
+       x = "Disk Count", y = "Total Illegal States") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+---
+
+# Statistical Analysis
+
+## Logistic Regression: Predicting Solvability
+
+```{r logistic_regression}
+# Fit logistic regression model
+logit_model <- glm(is_solvable ~ disk_count + target_alteration_percent + 
+                     illegal_formation_handler + ground_handler + duplicate_handler,
+                   data = data, family = binomial)
+
+# Summary
+summary(logit_model)
+
+# Odds ratios
+exp(coef(logit_model)) %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Variable") %>%
+  rename(Odds_Ratio = ".") %>%
+  kable(caption = "Odds Ratios for Solvability", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## ANOVA: Total Moves to Solve (Solvable Runs Only)
+
+```{r anova_moves}
+# Fit full factorial ANOVA model
+anova_model <- aov(total_moves_to_solve ~ disk_count * target_alteration_percent * 
+                     illegal_formation_handler * ground_handler * duplicate_handler,
+                   data = data_solvable)
+
+# ANOVA table
+summary(anova_model)
+
+# Type II Anova for unbalanced designs
+Anova(anova_model, type = "II") %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Source") %>%
+  kable(caption = "Type II ANOVA Table for Total Moves", digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## ANOVA Diagnostics
+
+```{r anova_diagnostics, fig.height=8}
+par(mfrow = c(2, 2))
+plot(anova_model)
+par(mfrow = c(1, 1))
+```
+
+## Post-Hoc Comparisons: Tukey HSD
+
+```{r tukey_hsd}
+# Tukey HSD for main effects
+tukey_disk <- TukeyHSD(aov(total_moves_to_solve ~ disk_count, data = data_solvable))
+tukey_alteration <- TukeyHSD(aov(total_moves_to_solve ~ target_alteration_percent, data = data_solvable))
+tukey_formation <- TukeyHSD(aov(total_moves_to_solve ~ illegal_formation_handler, data = data_solvable))
+
+# Display results
+tukey_disk$disk_count %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Comparison") %>%
+  kable(caption = "Tukey HSD: Disk Count", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+tukey_alteration$target_alteration_percent %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Comparison") %>%
+  kable(caption = "Tukey HSD: Alteration Percentage", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+tukey_formation$illegal_formation_handler %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Comparison") %>%
+  kable(caption = "Tukey HSD: Formation Handler", digits = 3) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Estimated Marginal Means
+
+```{r emmeans}
+# Calculate estimated marginal means
+emm_disk <- emmeans(anova_model, ~ disk_count)
+emm_alteration <- emmeans(anova_model, ~ target_alteration_percent)
+emm_formation <- emmeans(anova_model, ~ illegal_formation_handler)
+
+# Display results
+summary(emm_disk) %>%
+  as.data.frame() %>%
+  kable(caption = "Estimated Marginal Means: Disk Count", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+summary(emm_alteration) %>%
+  as.data.frame() %>%
+  kable(caption = "Estimated Marginal Means: Alteration %", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+summary(emm_formation) %>%
+  as.data.frame() %>%
+  kable(caption = "Estimated Marginal Means: Formation Handler", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+---
+
+# Two-Factor Interactions
+
+## Disk Count × Alteration Rate
+
+```{r interaction_disk_alt_analysis}
+emm_interaction <- emmeans(anova_model, ~ disk_count * target_alteration_percent)
+
+# Interaction plot
+emmip(anova_model, disk_count ~ target_alteration_percent, CIs = TRUE) +
+  labs(title = "Interaction Plot: Disk Count × Alteration Rate",
+       x = "Target Alteration %", y = "Estimated Marginal Mean (Moves)",
+       color = "Disk Count") +
+  theme_minimal()
+```
+
+## Formation Handler × Alteration Rate
+
+```{r interaction_formation_alt}
+emmip(anova_model, illegal_formation_handler ~ target_alteration_percent, CIs = TRUE) +
+  labs(title = "Interaction Plot: Formation Handler × Alteration Rate",
+       x = "Target Alteration %", y = "Estimated Marginal Mean (Moves)",
+       color = "Formation Handler") +
+  theme_minimal()
+```
+
+---
+
+# Alteration Analysis
+
+## Actual vs Target Alteration Rate
+
+```{r alteration_accuracy}
+alteration_comparison <- data_solvable %>%
+  group_by(target_alteration_percent) %>%
+  summarise(
+    mean_actual = mean(actual_alteration_percent, na.rm = TRUE),
+    sd_actual = sd(actual_alteration_percent, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(target = as.numeric(as.character(target_alteration_percent)))
+
+alteration_comparison %>%
+  kable(caption = "Actual vs Target Alteration Rates", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+# Plot
+ggplot(alteration_comparison, aes(x = target, y = mean_actual)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_errorbar(aes(ymin = mean_actual - sd_actual, ymax = mean_actual + sd_actual), 
+                width = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Actual vs Target Alteration Rate",
+       x = "Target Alteration %", y = "Actual Alteration %") +
+  theme_minimal()
+```
+
+---
+
+# Efficiency Metrics
+
+## Overhead Analysis
+
+```{r overhead_analysis}
+# Calculate theoretical minimum moves for each disk count
+theoretical_min <- data.frame(
+  disk_count = c("3", "5", "7", "9"),
+  theoretical_min_moves = c(7, 31, 127, 511)
+)
+
+overhead_data <- data_solvable %>%
+  left_join(theoretical_min, by = "disk_count") %>%
+  mutate(
+    overhead = total_moves_to_solve - theoretical_min_moves,
+    overhead_percent = (overhead / theoretical_min_moves) * 100
+  )
+
+overhead_summary <- overhead_data %>%
+  group_by(disk_count, target_alteration_percent) %>%
+  summarise(
+    mean_overhead = mean(overhead, na.rm = TRUE),
+    mean_overhead_pct = mean(overhead_percent, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+overhead_summary %>%
+  kable(caption = "Overhead Analysis: Additional Moves Beyond Theoretical Minimum", digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+# Visualization
+ggplot(overhead_summary, aes(x = target_alteration_percent, y = mean_overhead_pct, 
+                              color = disk_count, group = disk_count)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(title = "Overhead % by Disk Count and Alteration Rate",
+       x = "Target Alteration %", y = "Mean Overhead %",
+       color = "Disk Count") +
+  theme_minimal()
+```
+
+---
+
+# Conclusions
+
+## Key Findings
+
+1. **Disk Count Effect**: [To be filled based on results]
+2. **Alteration Rate Impact**: [To be filled based on results]
+3. **Handler Strategies**: [To be filled based on results]
+4. **Interactions**: [To be filled based on results]
+
+## Recommendations
+
+1. [Based on statistical analysis]
+2. [Based on efficiency metrics]
+3. [Based on success rates]
+
+## Future Work
+
+- Investigate additional handler strategies
+- Test with larger disk counts
+- Explore non-uniform alteration distributions
+- Develop predictive models for solvability
+
+---
+
+# Session Information
+
+```{r session_info}
+sessionInfo()
+```
