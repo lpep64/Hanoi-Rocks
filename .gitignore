@@ -16,15 +16,27 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual environments
+# Virtual Environment
 venv/
-ENV/
 env/
-.venv
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
 
 # IDE
 .vscode/
@@ -32,18 +44,11 @@ env/
 *.swp
 *.swo
 *~
-
-# Data files
-data/results.csv
-data/raw_move_logs/*.log
-
-# R
-.Rproj.user/
-.Rhistory
-.RData
-.Ruserdata
-*.Rproj
-
-# OS
 .DS_Store
-Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Project specific
+*.log
+.env
