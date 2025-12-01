@@ -33,9 +33,9 @@ FACTOR_C_LEVELS = {
 # Experimental Constants
 # ==========================================
 NUM_DISKS = 5  # All tests use 5 disks
-NUM_TRIALS_PER_CONDITION = 50  # 50 trials per condition
+NUM_TRIALS_PER_CONDITION = 100  # 100 trials per condition
 TOTAL_CONDITIONS = 8  # 2^3
-TOTAL_TRIALS = TOTAL_CONDITIONS * NUM_TRIALS_PER_CONDITION  # 400 trials
+TOTAL_TRIALS = TOTAL_CONDITIONS * NUM_TRIALS_PER_CONDITION  # 800 trials
 
 # Timeout and penalty
 MAX_MOVES = 5000  # Maximum moves before timeout
