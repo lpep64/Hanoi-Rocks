@@ -70,18 +70,16 @@ class Randomizer:
     def select_corruption_type(self) -> str:
         """
         Select corruption type based on probabilities:
-        - 67% move (2/3)
-        - 33% remove (1/3)
-        - NO add disk (removed to keep problem solvable)
+        - 100% move (disk conservation REQUIRED)
+        - REMOVED: disk removal/addition breaks fundamental constraints
+        
+        CRITICAL: Disk conservation is mandatory. All N disks must always exist.
+        Corruption only creates illegal configurations by moving disks.
         
         Returns:
-            str: 'move' or 'remove'
+            str: 'move'
         """
-        rand_val = random.random()
-        if rand_val < 0.67:
-            return 'move'
-        else:
-            return 'remove'
+        return 'move'  # Always move, never remove/add disks
     
     def corrupt_state(self, state: List[List[int]], corruption_rate: float) -> Optional[Dict]:
         """
@@ -106,12 +104,9 @@ class Randomizer:
         if not self.should_corrupt(corruption_rate):
             return None
         
-        corruption_type = self.select_corruption_type()
-        
-        if corruption_type == 'move':
-            return self._corrupt_move(state)
-        else:  # 'remove'
-            return self._corrupt_remove(state)
+        # CRITICAL FIX: Only use 'move' corruption to preserve disk conservation
+        # Removing or adding disks violates the fundamental constraint
+        return self._corrupt_move(state)
     
     def _corrupt_move(self, state: List[List[int]]) -> Optional[Dict]:
         """

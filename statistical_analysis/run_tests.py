@@ -2,6 +2,13 @@
 Main Experiment Orchestrator for Tower of Hanoi Statistical Analysis
 Runs 8 conditions × 50 trials = 400 total trials
 Implements: Generate → Execute → Validate → Corrupt → Regenerate loop
+
+CRITICAL FIX (Dec 3, 2025):
+- Goal is FULL SOLUTION (all disks on C in order), not just legality
+- Main loop continues until is_solved() returns True
+- BFS achieves legality, then Phase 3 completes solution to C
+- If corruption occurs, regenerates solution from current corrupted state
+- Trials only terminate when fully solved or timeout (no partial solutions)
 """
 
 import sys
@@ -74,23 +81,27 @@ class ExperimentRunner:
         # Phase 3: Standard Hanoi Solution (move to C)
         # Only run if not already solved
         # Note: BFS achieves legality but may not solve to C, so we still need this phase
-        # However, if randomizer added/removed disks, standard solver may fail due to disk gaps
         if not self.validator.is_solved(current_state):
             # State is legal but not solved (not all on C)
-            # Try standard Hanoi solver first
-            try:
-                three_peg_state = [current_state[0], current_state[1], current_state[2]]
-                moves, final_state_obj = solve_hanoi_from_image(three_peg_state, source='A', destination='C', auxiliary='B')
-                # Extract state from TowerState object (uses pegs dict)
-                current_state[0] = final_state_obj.pegs['A']
-                current_state[1] = final_state_obj.pegs['B']
-                current_state[2] = final_state_obj.pegs['C']
-                all_moves.extend(moves)
-            except (ValueError, Exception):
-                # Standard solver failed (disk gaps from added/removed disks during corruption)
-                # State is already legal from Phase 2, so we're done
-                # This is acceptable: goal is legality, not necessarily solution to C
-                pass
+            # CRITICAL FIX: BFS may leave disks in Queue - must move them to A/B/C first
+            
+            # Validate state before Phase 3
+            # Ground should be empty by now (Phase 1 clears it)
+            if current_state[self.PEG_GROUND]:
+                raise ValueError(f"Ground peg still has disks after Phase 1: {current_state[self.PEG_GROUND]}")
+            
+            # Queue should be empty (Phase 2 algorithms must clear it)
+            if current_state[self.PEG_QUEUE]:
+                raise ValueError(f"Queue peg still has disks after Phase 2: {current_state[self.PEG_QUEUE]}")
+            
+            # Standard Hanoi solver on clean 3-peg state
+            three_peg_state = [current_state[0], current_state[1], current_state[2]]
+            moves, final_state_obj = solve_hanoi_from_image(three_peg_state, source='A', destination='C', auxiliary='B')
+            # Extract state from TowerState object (uses pegs dict)
+            current_state[0] = final_state_obj.pegs['A']
+            current_state[1] = final_state_obj.pegs['B']
+            current_state[2] = final_state_obj.pegs['C']
+            all_moves.extend(moves)
         
         return all_moves
     
@@ -139,8 +150,8 @@ class ExperimentRunner:
         num_corruptions_occurred = 0
         timeout = False
         
-        # Main execution loop - goal is to achieve LEGALITY (not necessarily full solution)
-        while not self.validator.is_legal(state) and total_moves < MAX_MOVES:
+        # Main execution loop - goal is to achieve FULL SOLUTION (all disks on C)
+        while not self.validator.is_solved(state) and total_moves < MAX_MOVES:
             # Generate solution path
             solution_path = self.generate_solution(state, stack_algo, ground_algo)
             num_regenerations += 1
@@ -164,15 +175,15 @@ class ExperimentRunner:
                 corruption_result = randomizer.corrupt_state(state, corruption_rate)
                 if corruption_result:
                     num_corruptions_occurred += 1
-                    # State corrupted, need to regenerate solution
+                    # State corrupted, need to regenerate solution from current state
                     break
                 
-                # Check if legal (goal achieved)
-                if self.validator.is_legal(state):
+                # Check if solved (goal achieved)
+                if self.validator.is_solved(state):
                     break
             
-            # If legal, exit main loop
-            if self.validator.is_legal(state):
+            # If solved, exit main loop
+            if self.validator.is_solved(state):
                 break
         
         # Check timeout
@@ -180,8 +191,8 @@ class ExperimentRunner:
             timeout = True
             total_moves = TIMEOUT_PENALTY
         
-        # Validate final state (check if legal, not necessarily solved)
-        final_state_valid = self.validator.is_legal(state)
+        # Validate final state (check if solved - all disks on C in order)
+        final_state_valid = self.validator.is_solved(state)
         
         return {
             'trial_id': f"C{condition['id']}_T{trial_num}",

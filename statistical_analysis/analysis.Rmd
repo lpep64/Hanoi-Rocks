@@ -1,7 +1,7 @@
 ---
 title: "Hanoi Towers Illegal State Algorithms Performance Analysis"
 author: "Luke Pepin"
-date: "2025-12-01"
+date: "2025-12-03"
 output: pdf_document
 ---
 
@@ -25,7 +25,7 @@ data <- read.csv("results.csv")
 # Convert to factors with readable labels
 data$stack_algorithm <- factor(data$stack_algorithm, 
                                 levels = c("dig_out", "a_star"),
-                                labels = c("Dig-Out", "A*"))
+                                labels = c("Dig-Out", "BFS"))
 data$ground_algorithm <- factor(data$ground_algorithm,
                                  levels = c("greedy", "patient"),
                                  labels = c("Greedy", "Patient"))
@@ -83,7 +83,7 @@ group_means <- data %>%
 print(group_means)
 
 # Two-way interaction plots
-# 1. Stack × Corruption
+# 1. Stack x Corruption
 group_means_sc <- data %>%
   group_by(stack, corruption) %>%
   summarise(
@@ -98,13 +98,13 @@ ggplot(group_means_sc, aes(x = corruption, y = mean_value, color = stack, group 
   geom_line(size = 1) + 
   geom_point(size = 3) + 
   geom_errorbar(aes(ymin = mean_value - se, ymax = mean_value + se), width = 0.15) +
-  labs(title = "Interaction: Stack Algorithm × Corruption Rate", 
+  labs(title = "Interaction: Stack Algorithm x Corruption Rate", 
        y = "Mean Total Moves", 
        x = "Corruption Rate", 
        color = "Stack Algorithm") + 
   theme_minimal(base_size = 10)
 
-# 2. Ground × Corruption
+# 2. Ground x Corruption
 group_means_gc <- data %>%
   group_by(ground, corruption) %>%
   summarise(
@@ -119,13 +119,13 @@ ggplot(group_means_gc, aes(x = corruption, y = mean_value, color = ground, group
   geom_line(size = 1) + 
   geom_point(size = 3) + 
   geom_errorbar(aes(ymin = mean_value - se, ymax = mean_value + se), width = 0.15) +
-  labs(title = "Interaction: Ground Algorithm × Corruption Rate", 
+  labs(title = "Interaction: Ground Algorithm x Corruption Rate", 
        y = "Mean Total Moves", 
        x = "Corruption Rate", 
        color = "Ground Algorithm") + 
   theme_minimal(base_size = 10)
 
-# 3. Stack × Ground
+# 3. Stack x Ground
 group_means_sg <- data %>%
   group_by(stack, ground) %>%
   summarise(
@@ -140,7 +140,7 @@ ggplot(group_means_sg, aes(x = ground, y = mean_value, color = stack, group = st
   geom_line(size = 1) + 
   geom_point(size = 3) + 
   geom_errorbar(aes(ymin = mean_value - se, ymax = mean_value + se), width = 0.15) +
-  labs(title = "Interaction: Stack Algorithm × Ground Algorithm", 
+  labs(title = "Interaction: Stack Algorithm x Ground Algorithm", 
        y = "Mean Total Moves", 
        x = "Ground Algorithm", 
        color = "Stack Algorithm") + 
@@ -148,51 +148,19 @@ ggplot(group_means_sg, aes(x = ground, y = mean_value, color = stack, group = st
 ```
 
 ```{r analysis}
-# Create visualization of main effects
-# 1. Stack Algorithm effect
-p1 <- ggplot(data, aes(x = stack, y = value)) +
-  stat_summary(fun = mean, geom = "point", size = 3) +
-  stat_summary(fun = mean, geom = "line", aes(group = 1), size = 0.8) +
-  labs(title = "Main Effect of Stack Algorithm", 
-       y = "Total Moves", 
-       x = "Stack Algorithm") +
-  theme_minimal(base_size = 10)
-print(p1)
-
-# 2. Ground Algorithm effect
-p2 <- ggplot(data, aes(x = ground, y = value)) +
-  stat_summary(fun = mean, geom = "point", size = 2) +
-  stat_summary(fun = mean, geom = "line", aes(group = 1), size = 0.8) +
-  labs(title = "Main Effect of Ground Algorithm", 
-       y = "Total Moves", 
-       x = "Ground Algorithm") +
-  theme_minimal(base_size = 10)
-print(p2)
-
-# 3. Corruption Rate effect
-p3 <- ggplot(data, aes(x = corruption, y = value)) +
-  stat_summary(fun = mean, geom = "point", size = 2) +
-  stat_summary(fun = mean, geom = "line", aes(group = 1), size = 0.8) +
-  labs(title = "Main Effect of Corruption Rate", 
-       y = "Total Moves", 
-       x = "Corruption Rate") +
-  theme_minimal(base_size = 10)
-print(p3)
-
-# 4. Three-way interaction plot (Stack × Ground faceted by Corruption)
-p4 <- ggplot(group_means, aes(x = ground, y = mean_value, color = stack, group = stack)) +
+# Three-way interaction plot (Stack x Ground faceted by Corruption)
+ggplot(group_means, aes(x = ground, y = mean_value, color = stack, group = stack)) +
   geom_line(size = 1) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = mean_value - se, ymax = mean_value + se), width = 0.15) +
   facet_wrap(~corruption) +
   labs(
-    title = "Three-Way Interaction: Stack × Ground × Corruption",
+    title = "Three-Way Interaction: Stack x Ground x Corruption",
     x = "Ground Algorithm",
     y = "Mean Total Moves",
     color = "Stack Algorithm"
   ) +
   theme_minimal(base_size = 10)
-print(p4)
 
 # Fit three-way ANOVA model with all interactions
 # Model: Total Moves ~ Stack * Ground * Corruption
@@ -205,34 +173,73 @@ summary(model)
 anova_sum <- summary(model)[[1]]
 plot.design(value ~ stack + ground + corruption, data = data)
 
-# Sample Size Calculation
-k <- 8  # Number of groups (2 stack × 2 ground × 2 corruption)
-f <- 0.25  # Small-medium effect size for algorithm comparisons
-pwr_result <- pwr.anova.test(k = k, f = f, sig.level = 0.05, power = 0.9)
-cat("Required sample size per group:", ceiling(pwr_result$n), "\n")
-
-# Calculate statistical power from the experiment
-# Define parameters
-k <- 8 # total number of groups (2 × 2 × 2)
+# Calculate Observed Effect Size from Data
+k <- 8  # Number of groups (2 stack x 2 ground x 2 corruption)
 n_per_group <- nrow(data) / k # samples per group
-f <- 0.25 # small-medium effect size for algorithm performance
-# Calculate power
-sample_calc <- pwr.anova.test(k = k, n = n_per_group, f = f, sig.level = 0.05)$power
-# Print results
-cat("Actual power achieved:", round(sample_calc, 4), "\n")
+
+# Calculate eta-squared (eta^2) from ANOVA
+ss_total <- sum((data$value - mean(data$value))^2)
+ss_residual <- sum(residuals(model)^2)
+ss_treatment <- ss_total - ss_residual
+eta_squared <- ss_treatment / ss_total
+
+# Convert eta-squared to Cohen's f
+# f = sqrt(eta^2 / (1 - eta^2))
+f_observed <- sqrt(eta_squared / (1 - eta_squared))
+
+cat("Observed Effect Size:\n")
+cat("  Eta-squared (eta^2):", round(eta_squared, 4), "\n")
+cat("  Cohen's f:", round(f_observed, 4), "\n")
+
+# Sample Size Calculation (using observed effect size)
+pwr_result <- pwr.anova.test(k = k, f = f_observed, sig.level = 0.05, power = 0.9)
+cat("\nRequired sample size per group (at observed effect):", ceiling(pwr_result$n), "\n")
+
+# Calculate actual power achieved
+actual_power <- pwr.anova.test(k = k, n = n_per_group, f = f_observed, sig.level = 0.05)$power
+cat("Actual power achieved:", round(actual_power, 4), "\n")
 
 # Tukey's HSD Test
 tukey_result <- TukeyHSD(model)
 print(tukey_result)
 plot(tukey_result, las = 1, cex.axis = 0.6)
 
-# Fisher's LSD Test
-lsd_resultStack <- LSD.test(model, "stack", p.adj = "none")
-lsd_resultGround <- LSD.test(model, "ground", p.adj = "none")
-lsd_resultCorr <- LSD.test(model, "corruption", p.adj = "none")
-print(lsd_resultStack)
-print(lsd_resultGround)
-print(lsd_resultCorr)
+# Estimated Marginal Means (EMMs) - Proper contrasts respecting interactions
+cat("\n=== Estimated Marginal Means Analysis ===\n\n")
+
+# Main effects
+emm_stack <- emmeans(model, ~ stack)
+emm_ground <- emmeans(model, ~ ground)
+emm_corruption <- emmeans(model, ~ corruption)
+
+cat("Main Effect: Stack Algorithm\n")
+print(emm_stack)
+print(pairs(emm_stack))
+
+cat("\nMain Effect: Ground Algorithm\n")
+print(emm_ground)
+print(pairs(emm_ground))
+
+cat("\nMain Effect: Corruption Rate\n")
+print(emm_corruption)
+print(pairs(emm_corruption))
+
+# Two-way interactions
+cat("\n=== Two-Way Interactions ===\n")
+emm_stack_ground <- emmeans(model, ~ stack | ground)
+cat("\nStack x Ground Interaction:\n")
+print(emm_stack_ground)
+print(pairs(emm_stack_ground))
+
+emm_stack_corruption <- emmeans(model, ~ stack | corruption)
+cat("\nStack x Corruption Interaction:\n")
+print(emm_stack_corruption)
+print(pairs(emm_stack_corruption))
+
+# Three-way interaction
+emm_three_way <- emmeans(model, ~ stack * ground * corruption)
+cat("\nThree-Way Interaction (All 8 Conditions):\n")
+print(emm_three_way)
 
 # Assumption Tests
 ## Residuals vs Fitted
@@ -240,23 +247,3 @@ plot(model, which=1)
 ## Q-Q Residuals
 plot(model, which=2)
 ```
-
-# Conclusion
-
-### **Validation**
-
-The experiment was statistically robust. The sample size per group was sufficient, and power analysis results confirm the reliability of the findings.
-
----
-
-### **Analysis and Recommendation**
-
-The three-way ANOVA examined the effects of **Stack Algorithm**, **Ground Algorithm**, and **Corruption Rate** on the total number of moves required to solve the Tower of Hanoi puzzle with illegal states.
-
-Key findings:
-* Evaluate which main effects and interactions are statistically significant from the ANOVA table
-* Identify which algorithm combinations minimize total moves
-* Assess how corruption rate impacts performance across different algorithm pairs
-* Use Tukey's HSD results to determine which specific combinations differ significantly
-
-**Recommendation:** Based on the analysis results, select the algorithm combination that minimizes total moves while maintaining robustness across corruption rates.
