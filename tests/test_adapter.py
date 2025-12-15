@@ -9,8 +9,8 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from vision_adapter import VisionAdapter
-from state_solutions.hanoi_state import solve_hanoi_from_image
+from hanoi.utils.vision_adapter import VisionAdapter
+from hanoi.core.move import solve_hanoi_from_image
 
 def print_move_data(moves):
     """Print move data by directly accessing move attributes"""

@@ -5,8 +5,8 @@ All configurations ensure no larger disks are on top of smaller ones
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'state_solutions'))
-from hanoi_image import solve_hanoi_from_image
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from hanoi.core.move import solve_hanoi_from_image
 import time
 
 # Comprehensive test cases with legal configurations

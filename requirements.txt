@@ -1,0 +1,12 @@
+# Core dependencies
+streamlit>=1.32.0
+plotly>=5.18.0
+
+# Testing
+pytest>=9.0.0
+
+# Already included in Python stdlib:
+# - typing
+# - copy
+# - collections
+# - heapq

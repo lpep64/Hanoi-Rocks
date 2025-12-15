@@ -1,204 +1,209 @@
 # Hanoi-Rocks 🗼
 
-A comprehensive Tower of Hanoi solver collection featuring multiple solution approaches, including recursive, iterative, dynamic programming, generalized state-based solvers, and **statistical analysis framework** for comparing illegal state resolution strategies under environmental randomness.
+**Advanced Tower of Hanoi Solver with Complex Variations**
 
-## 📋 Project Overview
+A comprehensive research and application project for solving Tower of Hanoi puzzles with advanced features including illegal state resolution, ground disk retrieval, gap handling, duplicate disks, and flexible destination pegs.
 
-This project implements various solutions to the classic Tower of Hanoi puzzle, with a focus on:
-- Multiple solving algorithms (recursive, iterative, dynamic programming)
-- Generalized solvers that work from any legal initial state
-- Illegal state resolution with multiple strategies
-- Environmental randomness simulation
-- **Statistical experimentation framework (2³ factorial design)**
-- Detailed move tracking with position and height information
+---
 
-## 🚀 Features
+## 🚀 Quick Start
 
-### Base Solutions (`base_solutions/`)
-- **`hanoi_recursive.py`**: Classic recursive implementation
-- **`hanoi_iterative.py`**: Iterative solution using explicit stack
-- **`hanoi_dynamic_programming.py`**: Dynamic programming approach
+### Basic Usage
 
-### State Solutions (`state_solutions/`)
-- **`hanoi_state.py`**: Generalized solver with complete state tracking
-  - Solves from any legal initial configuration
-  - Tracks disk position, initial height, and destination height
-  - Validates state legality
-- **`hanoi_height.py`**: Height-based solution tracking
-- **`hanoi_image.py`**: Arbitrary initial state solver
-
-### Illegal Solutions (`illegal_solutions/`)
-Handles illegal states using 4th Queue peg and Ground violations:
-
-#### Stack Violation Solvers
-- **`illegal_stack.py`**: Contains 2 algorithms for statistical analysis
-  - **Dig Out**: Surgical fix targeting first illegal overlap
-  - **BFS (Breadth-First Search)**: Optimal pathfinding to ANY legal state (shortest path guaranteed)
-
-#### Ground Violation Solvers
-- **`illegal_ground.py`**: Contains 2 strategies
-  - **Greedy Placement**: Places largest ground disk with minimum violation
-  - **Patient Wait**: Waits for legal move opportunity
-
-#### Environment Simulation
-- **`randomizer.py`**: Simulates physical testbed errors
-  - 50% chance: Move disk to random location
-  - 25% chance: Remove disk from existence
-  - 25% chance: Add new disk at n+1
-  - Seeded randomness for reproducibility
-
-#### Validation
-- **`illegal_check.py`**: Validates state legality (no Queue/Ground violations, proper stacking)
-
-### Statistical Analysis (`statistical_analysis/`)
-**2³ Factorial Experiment** comparing illegal state resolution strategies:
-
-#### Experimental Factors
-- **Factor A**: Stack Algorithm (Dig Out vs BFS)
-- **Factor B**: Ground Algorithm (Greedy vs Patient)
-- **Factor C**: Corruption Rate (5% vs 10% per move)
-
-#### Framework Components
-- **`experiment_config.py`**: Experimental design constants and configuration
-  - 8 conditions × 50 trials = **400 total trials**
-  - All tests use 5 disks
-  - Max 5000 moves before timeout (penalty: 5001)
-
-- **`state_validator.py`**: State transition validation
-  - Checks solution correctness
-  - Validates disk conservation
-  - Detects illegal configurations
-
-- **`run_tests.py`**: Main orchestrator
-  - Generates corrupted initial states
-  - Implements **Generate→Execute→Validate→Corrupt→Regenerate** loop
-  - Tracks: total moves, regenerations, corruptions
-  - Outputs: `results.csv`
-
-- **`results_analyzer.py`**: Statistical analysis
-  - 3-way ANOVA (requires scipy)
-  - Descriptive statistics by factor
-  - Condition-level summaries
-  - Outputs: `results_summary.csv`
-
-## 🧪 Testing
-
-Comprehensive test suite in `tests/`:
-- `test_hanoi_state.py`: Tests for state-based solutions
-- `test_hanoi_image.py`: Tests for image-based solutions
-- `test_adapter.py`: Vision adapter tests
-- `test_illegal.py`: Illegal state handler tests
-
-Run tests:
-```bash
-python tests/test_hanoi_state.py
-python tests/test_illegal.py
-```
-
-## 💻 Usage
-
-### Basic Example (Recursive)
 ```python
-from base_solutions.hanoi_recursive import hanoi_recursive
+from hanoi_final_flag import solve_hanoi
 
-moves = hanoi_recursive(n=5, source='A', destination='C', auxiliary='B')
+# Simple 3-disk problem
+state = [[3, 2, 1], [], [], [], []]
+flags = {
+    'target_peg': 2,  # Solve to Peg C
+    'duplicate_strategy': 'discard',
+    'ground_strategy': 'greedy_3',
+    'illegal_resolution': 'bfs_3peg'
+}
+
+moves = solve_hanoi(state, flags)
 for move in moves:
     print(move)
 ```
 
-### Illegal State Resolution
-```python
-from illegal_solutions.illegal_stack import solve_illegal_dig_out
-from illegal_solutions.illegal_ground import solve_ground_greedy
+### Streamlit Visualization
 
-# State format: [A, B, C, Queue, Ground]
-illegal_state = [
-    [3, 1],  # Stack violation on A
-    [2],
-    [],
-    [],
-    [5, 4]   # Ground violations
+```bash
+streamlit run app.py
+```
+
+Visit `http://localhost:8501` for an interactive web interface with visual disk rendering and move-by-move playback.
+
+---
+
+## 📁 Project Structure
+
+```
+Hanoi-Rocks/
+├── README.md                          # This file
+├── hanoi_final.py                     # Standalone solver (no imports, fixed defaults)
+├── hanoi_final_flag.py                # Full-featured master solver
+├── app.py                              # Streamlit visualization app
+│
+├── hanoi/                              # Core library package
+│   ├── core/                           # Core solving logic
+│   ├── illegal/                        # Illegal state resolution
+│   ├── base/                           # Research baseline algorithms
+│   └── utils/                          # Helper functions
+│
+├── tests/                              # Consolidated test suite
+│   ├── test_core.py                    # Core functionality tests
+│   ├── test_hanoi_image.py             # 95 comprehensive state tests
+│   ├── test_adapter.py                 # Vision adapter tests
+│   └── test_solver_integration.py      # Integration tests
+│
+└── statistical_analysis/               # Research experiments (unchanged)
+```
+
+---
+
+## 🎯 Key Features
+
+### 1. **hanoi_final.py** - Standalone Solver
+- ✅ Zero external imports (fully self-contained)
+- ✅ Fixed configuration: `discard`, `greedy_3`, `bfs_3peg`
+- ✅ Simple API: `solve_hanoi(state, destination_peg=2)`
+
+### 2. **hanoi_final_flag.py** - Master Solver
+
+**Duplicate Handling:**
+- `'merge'`: Keep duplicates as separate physical disks (1a, 1b)
+- `'discard'`: Remove duplicate disk instances
+
+**Ground Strategy (4 variants):**
+- `'greedy_3'`: Minimize violations using 3 pegs
+- `'greedy_4'`: Minimize violations using 4 pegs
+- `'patient_3'`: Only move when legal placement exists (3 pegs)
+- `'patient_4'`: Only move when legal placement exists (4 pegs)
+
+**Illegal Resolution (5 algorithms):**
+- `'bubble_sort'`: Swap adjacent illegal disks
+- `'total_evacuation'`: Clear illegal peg and redistribute
+- `'dig_out'`: Surgical fix for first illegal overlap
+- `'bfs_3peg'`: Optimal pathfinding without Queue ⭐ **Recommended**
+- `'bfs_4peg'`: Optimal pathfinding with Queue assistance
+
+**State Format:** 5-array `[Peg A, Peg B, Peg C, Queue, Ground]`
+- Disks ordered bottom-to-top: `[3, 2, 1]` = disk 3 at bottom
+
+### 3. **app.py** - Streamlit Visualization
+- 📊 Graphical disk rendering
+- ▶️ Move-by-move playback
+- ⚙️ Interactive state editor
+- 🎚️ Strategy configuration
+- 📈 Solution statistics
+
+---
+
+## 🧪 Running Tests
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test suites
+python tests/test_core.py
+python tests/test_hanoi_image.py           # 95 test cases
+python tests/test_solver_integration.py
+```
+
+**Test Coverage:**
+- ✅ 95 comprehensive state configurations
+- ✅ All 5 illegal resolution algorithms
+- ✅ All 4 ground retrieval strategies
+- ✅ Edge cases: gaps, duplicates, illegal states
+
+---
+
+## 💡 Usage Examples
+
+### Example 1: Ground Disks
+```python
+state = [
+    [5, 3],     # Peg A
+    [4],        # Peg B
+    [],         # Peg C
+    [],         # Queue
+    [2, 1]      # Ground (illegal!)
 ]
 
-# Solve ground violations first
-moves, state = solve_ground_greedy(illegal_state)
+flags = {'target_peg': 2, 'duplicate_strategy': 'discard',
+         'ground_strategy': 'greedy_3', 'illegal_resolution': 'bfs_3peg'}
 
-# Then solve stack violations
-moves, final_state = solve_illegal_dig_out(state)
+moves = solve_hanoi(state, flags)
 ```
 
-### Run Statistical Experiment
-```bash
-# Run all 400 trials (takes 10-30 minutes)
-cd statistical_analysis
-python run_tests.py
-
-# Analyze results (requires scipy)
-python results_analyzer.py
-```
-
-### Environment Randomness Simulation
+### Example 2: Illegal Stacking
 ```python
-from illegal_solutions.randomizer import Randomizer
+state = [
+    [1, 2],     # ILLEGAL! (2 on top of 1)
+    [3], [], [], []
+]
 
-# Initialize with seed for reproducibility
-rand = Randomizer(seed=42)
-
-# Create corrupted initial state
-state = rand.create_corrupted_initial_state(n=5, num_corruptions=3)
-
-# Apply corruption during solving
-corruption_event = rand.corrupt_state(state, corruption_rate=0.10)
-if corruption_event:
-    print(f"Corruption: {corruption_event['type']}")
+moves = solve_hanoi(state, flags)  # BFS fixes illegal state first
 ```
 
-## 📊 Project Status
+### Example 3: Duplicate Disks
+```python
+state = [
+    [1],        # Peg A
+    [2, 4],     # Peg B
+    [3, 1],     # Peg C (duplicate disk 1)
+    [], [5]
+]
 
-- ✅ Base recursive, iterative, and DP solutions
-- ✅ Generalized state-based solver
-- ✅ Illegal stack solvers (Dig Out, A*)
-- ✅ Illegal ground solvers (Greedy, Patient)
-- ✅ Environment randomness simulation
-- ✅ Statistical experiment framework (2³ factorial)
-- ✅ ANOVA analysis tools
-- 🚧 Interaction plots and visualizations
-- 🚧 Additional post-hoc tests
-- 🚧 Complete API documentation
+flags = {'target_peg': 2, 'duplicate_strategy': 'merge',
+         'ground_strategy': 'greedy_3', 'illegal_resolution': 'bfs_3peg'}
 
-## 🛠️ Requirements
+moves = solve_hanoi(state, flags)
+# Duplicates labeled as 1a, 1b
+```
 
-### Core Functionality
-- Python 3.7+
-- No external dependencies
+---
 
-### Statistical Analysis (Optional)
+## 📦 Dependencies
+
 ```bash
-pip install scipy  # For ANOVA
-pip install matplotlib  # For plots (future)
+pip install streamlit plotly pytest
 ```
 
-## 📖 Experimental Design
+---
 
-The statistical analysis framework implements a **2³ factorial experiment**:
+## 🏗️ Architecture
 
-| Condition | Stack Algo | Ground Algo | Corruption | Trials |
-|-----------|------------|-------------|------------|--------|
-| 1 | Dig Out | Greedy | 5% | 50 |
-| 2 | Dig Out | Greedy | 10% | 50 |
-| 3 | Dig Out | Patient | 5% | 50 |
-| 4 | Dig Out | Patient | 10% | 50 |
-| 5 | BFS | Greedy | 5% | 50 |
-| 6 | BFS | Greedy | 10% | 50 |
-| 7 | BFS | Patient | 5% | 50 |
-| 8 | BFS | Patient | 10% | 50 |
+### Import Structure
+- `hanoi.core` → Base classes (Move, TowerState)
+- `hanoi.illegal` → Resolution algorithms
+- `hanoi.base` → Research baselines
+- Entry points (`hanoi_final.py`, `hanoi_final_flag.py`, `app.py`) at root
 
-**Goal**: Determine optimal combination for minimizing total moves to solution under environmental disturbances.
+### Testing Strategy
+- Unit tests: Individual components
+- Integration tests: End-to-end workflows
+- Comprehensive tests: 95 state configurations
 
-## 📝 License
+---
 
-This project is part of research/educational work exploring Tower of Hanoi solutions and state transitions.
+## 🔬 Statistical Analysis
 
-## 👤 Author
+The `statistical_analysis/` folder contains research experiments:
+- Algorithm performance comparison
+- Move count optimization
+- Strategy effectiveness metrics
+- R-based analysis (`analysis.Rmd`)
 
-lpep64 (Lord-of-this-World)
+---
+
+## 🤝 Contributing
+
+Research project optimized for reproducible experiments and educational use.
+
+---
+
+*Built with Python 3.13+ | Streamlit | Plotly*

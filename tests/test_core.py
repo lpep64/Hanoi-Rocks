@@ -5,8 +5,8 @@ Tests various LEGAL configurations for n=3, n=5, and n=7
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'state_solutions'))
-from hanoi_state import Move, TowerState, solve_hanoi_from_image
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from hanoi.core.move import Move, TowerState, solve_hanoi_from_image
 import time
 
 def test_move_class():

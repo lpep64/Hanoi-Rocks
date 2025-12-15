@@ -26,13 +26,16 @@ class Move:
         self.initial_height = initial_height
         self.destination_peg = destination_peg
         self.destination_height = destination_height
+        self.disk_label = None  # Optional label for duplicate disks (e.g., "1a", "1b")
     
     def __repr__(self):
-        return (f"Move(disk={self.disk}, {self.initial_peg}[h={self.initial_height}] -> "
+        label = f" '{self.disk_label}'" if self.disk_label else ""
+        return (f"Move(disk={self.disk}{label}, {self.initial_peg}[h={self.initial_height}] -> "
                 f"{self.destination_peg}[h={self.destination_height}])")
     
     def __str__(self):
-        return (f"Move disk {self.disk} from {self.initial_peg} (height {self.initial_height}) "
+        label = f" ({self.disk_label})" if self.disk_label else ""
+        return (f"Move disk {self.disk}{label} from {self.initial_peg} (height {self.initial_height}) "
                 f"to {self.destination_peg} (height {self.destination_height})")
 
 
