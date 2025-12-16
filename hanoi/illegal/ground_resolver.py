@@ -86,12 +86,37 @@ class GroundSolver:
         # Violation: placing larger disk on smaller
         return disk - top_disk
     
+    def is_peg_legal(self, peg_idx: int) -> bool:
+        """
+        Check if a peg is currently in a legal stacking order.
+        Returns True if peg is legal (bottom to top in descending order).
+        """
+        if peg_idx == self.PEG_QUEUE or peg_idx == self.PEG_GROUND:
+            return True  # Queue and Ground don't have stacking rules
+        
+        peg = self.state[peg_idx]
+        if len(peg) <= 1:
+            return True  # Empty or single disk is always legal
+        
+        # Check if each disk is smaller than the one below it
+        for i in range(len(peg) - 1):
+            if peg[i] < peg[i + 1]:  # Larger disk on top of smaller
+                return False
+        
+        return True
+    
     # ==========================================
-    # Strategy 1: Greedy 3-Peg
+    # Strategy 1: Greedy 3-Peg (Legality-Aware)
     # ==========================================
     def solve_greedy_3(self) -> Tuple[List[Move], List[List[int]]]:
         """
-        Greedy 3-peg strategy: Place largest ground disk on peg with minimum violation.
+        Greedy 3-peg strategy with legality priority:
+        Priority order for placing ground disk:
+        1. Legal move to legal peg (best)
+        2. Illegal move to legal peg
+        3. Legal move to illegal peg
+        4. Illegal move to illegal peg (worst)
+        
         Only considers the first 3 pegs (A, B, C).
         """
         
@@ -100,15 +125,44 @@ class GroundSolver:
             ground_disks = sorted(self.state[self.PEG_GROUND], reverse=True)
             largest_disk = ground_disks[0]
             
-            # Calculate violation scores for each standard peg (3 only)
-            best_peg = self.PEG_A
-            best_score = float('inf')
+            # Categorize moves by priority
+            # Priority 1: Legal move to legal peg
+            priority_1 = []
+            # Priority 2: Illegal move to legal peg
+            priority_2 = []
+            # Priority 3: Legal move to illegal peg
+            priority_3 = []
+            # Priority 4: Illegal move to illegal peg
+            priority_4 = []
             
             for peg_idx in [self.PEG_A, self.PEG_B, self.PEG_C]:
-                score = self.calculate_violation_score(largest_disk, peg_idx)
-                if score < best_score:
-                    best_score = score
-                    best_peg = peg_idx
+                move_is_legal = self.calculate_violation_score(largest_disk, peg_idx) == 0
+                peg_is_legal = self.is_peg_legal(peg_idx)
+                violation_score = self.calculate_violation_score(largest_disk, peg_idx)
+                
+                if move_is_legal and peg_is_legal:
+                    priority_1.append((peg_idx, violation_score))
+                elif not move_is_legal and peg_is_legal:
+                    priority_2.append((peg_idx, violation_score))
+                elif move_is_legal and not peg_is_legal:
+                    priority_3.append((peg_idx, violation_score))
+                else:  # not move_is_legal and not peg_is_legal
+                    priority_4.append((peg_idx, violation_score))
+            
+            # Select best move from highest priority group
+            best_peg = None
+            if priority_1:
+                # Among legal moves to legal pegs, pick any (all have score 0)
+                best_peg = priority_1[0][0]
+            elif priority_2:
+                # Among illegal moves to legal pegs, pick minimum violation
+                best_peg = min(priority_2, key=lambda x: x[1])[0]
+            elif priority_3:
+                # Among legal moves to illegal pegs, pick any
+                best_peg = priority_3[0][0]
+            else:
+                # Last resort: illegal move to illegal peg
+                best_peg = min(priority_4, key=lambda x: x[1])[0]
             
             # Execute move
             temp_moves = []
@@ -124,11 +178,17 @@ class GroundSolver:
         return self.moves, self.state
     
     # ==========================================
-    # Strategy 2: Greedy 4-Peg
+    # Strategy 2: Greedy 4-Peg (Legality-Aware)
     # ==========================================
     def solve_greedy_4(self) -> Tuple[List[Move], List[List[int]]]:
         """
-        Greedy 4-peg strategy: Place largest ground disk on peg with minimum violation.
+        Greedy 4-peg strategy with legality priority:
+        Priority order for placing ground disk:
+        1. Legal move to legal peg (best)
+        2. Illegal move to legal peg
+        3. Legal move to illegal peg
+        4. Illegal move to illegal peg (worst)
+        
         Considers all 4 pegs (A, B, C, Queue).
         """
         
@@ -137,15 +197,36 @@ class GroundSolver:
             ground_disks = sorted(self.state[self.PEG_GROUND], reverse=True)
             largest_disk = ground_disks[0]
             
-            # Calculate violation scores for all 4 pegs
-            best_peg = self.PEG_A
-            best_score = float('inf')
+            # Categorize moves by priority
+            priority_1 = []
+            priority_2 = []
+            priority_3 = []
+            priority_4 = []
             
             for peg_idx in [self.PEG_A, self.PEG_B, self.PEG_C, self.PEG_QUEUE]:
-                score = self.calculate_violation_score(largest_disk, peg_idx)
-                if score < best_score:
-                    best_score = score
-                    best_peg = peg_idx
+                move_is_legal = self.calculate_violation_score(largest_disk, peg_idx) == 0
+                peg_is_legal = self.is_peg_legal(peg_idx)
+                violation_score = self.calculate_violation_score(largest_disk, peg_idx)
+                
+                if move_is_legal and peg_is_legal:
+                    priority_1.append((peg_idx, violation_score))
+                elif not move_is_legal and peg_is_legal:
+                    priority_2.append((peg_idx, violation_score))
+                elif move_is_legal and not peg_is_legal:
+                    priority_3.append((peg_idx, violation_score))
+                else:
+                    priority_4.append((peg_idx, violation_score))
+            
+            # Select best move from highest priority group
+            best_peg = None
+            if priority_1:
+                best_peg = priority_1[0][0]
+            elif priority_2:
+                best_peg = min(priority_2, key=lambda x: x[1])[0]
+            elif priority_3:
+                best_peg = priority_3[0][0]
+            else:
+                best_peg = min(priority_4, key=lambda x: x[1])[0]
             
             # Execute move
             temp_moves = []

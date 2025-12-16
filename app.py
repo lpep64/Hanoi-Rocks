@@ -52,7 +52,7 @@ def initialize_session_state():
             'target_peg': 2,
             'duplicate_strategy': 'merge',
             'ground_strategy': 'greedy_3',
-            'illegal_resolution': 'dig_out'
+            'illegal_resolution': 'bfs_3peg'
         }
     
     if 'visualization_mode' not in st.session_state:
@@ -64,8 +64,8 @@ def initialize_session_state():
     if 'error_message' not in st.session_state:
         st.session_state.error_message = None
     
-    if 'disk_labels' not in st.session_state:
-        st.session_state.disk_labels = {}  # Maps disk number to label (e.g., {1: '1a', 5: '1b'})
+    if 'manual_moves' not in st.session_state:
+        st.session_state.manual_moves = []  # Track manual drag-and-drop moves
 
 # ==========================================
 # State Validation & Checksum
@@ -155,6 +155,48 @@ def reset_to_initial():
     st.session_state.current_state = deepcopy(st.session_state.initial_state)
     st.session_state.current_move_index = 0
 
+def manual_move_disk(from_peg_idx: int, to_peg_idx: int, disk_size: int, count: int = 1):
+    """
+    Manually move disk(s) from one peg to another (drag-and-drop).
+    Moves ALL copies of the disk together as a merged unit.
+    No rule enforcement - developer tool.
+    """
+    from hanoi.core.move import Move
+    
+    # Move ALL copies of the disk together
+    peg_names = ['A', 'B', 'C', 'Queue', 'Ground']
+    moved_count = 0
+    
+    # Remove all instances of this disk from source peg
+    while disk_size in st.session_state.current_state[from_peg_idx]:
+        st.session_state.current_state[from_peg_idx].remove(disk_size)
+        moved_count += 1
+    
+    # Add all copies to destination peg
+    for _ in range(moved_count):
+        st.session_state.current_state[to_peg_idx].append(disk_size)
+    
+    # Record move(s) - one for each disk moved
+    if moved_count > 0:
+        for i in range(moved_count):
+            # Calculate heights (stacked together at destination)
+            src_height = i
+            dst_height = len(st.session_state.current_state[to_peg_idx]) - moved_count + i
+            
+            move = Move(
+                disk=disk_size,
+                initial_peg=peg_names[from_peg_idx],
+                destination_peg=peg_names[to_peg_idx],
+                initial_height=src_height,
+                destination_height=dst_height
+            )
+            st.session_state.manual_moves.append(move)
+    
+    # Clear solution since state was manually modified
+    st.session_state.solution_moves = []
+    st.session_state.current_move_index = 0
+    st.session_state.solver_status = None
+
 def apply_move(move, forward: bool = True):
     """
     Apply or reverse a single move to the current state.
@@ -204,13 +246,6 @@ def run_solver():
             st.session_state.flags
         )
         
-        # Extract disk labels from moves
-        disk_labels = {}
-        for move in moves:
-            if move.disk_label:
-                disk_labels[move.disk] = move.disk_label
-        st.session_state.disk_labels = disk_labels
-        
         # Store solution
         st.session_state.solution_moves = moves
         st.session_state.current_move_index = 0
@@ -241,49 +276,63 @@ def run_solver():
 # Visualization Functions
 # ==========================================
 
-def create_disk_bar(disk_size: int, max_disk: int, color_idx: int) -> str:
-    """Create HTML for a disk bar."""
+def count_disk_duplicates(state: List[List[int]]) -> dict:
+    """Count occurrences of each disk value across all pegs."""
+    from collections import Counter
+    all_disks = []
+    for peg in state:
+        all_disks.extend(peg)
+    return Counter(all_disks)
+
+def create_disk_bar(disk_size: int, max_disk: int, color_idx: int, peg_idx: int, height: int, duplicate_count: int = 1) -> str:
+    """Create HTML for a disk bar with drag-and-drop support."""
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', 
               '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788']
     color = colors[color_idx % len(colors)]
     
     width_percent = (disk_size / max_disk) * 80 + 10  # Scale from 10% to 90%
     
-    # Get disk label if it exists
-    disk_label = st.session_state.disk_labels.get(disk_size, str(disk_size))
-    
-    # Add a badge if this is a duplicate disk
+    # Add duplicate count badge if more than one
     badge = ""
-    if disk_label and disk_label != str(disk_size) and disk_label[-1].isalpha():
-        # This is a duplicate disk (label ends with letter)
-        badge = '<span style="font-size: 0.7em; background: rgba(255,255,255,0.3); padding: 2px 4px; border-radius: 3px; margin-left: 5px;">dup</span>'
+    if duplicate_count > 1:
+        badge = f'<span style="font-size: 0.7em; background: rgba(255,255,255,0.4); padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-weight: bold;">×{duplicate_count}</span>'
     
-    return f"""<div style="width: {width_percent}%; height: 30px; background: linear-gradient(135deg, {color} 0%, {color}dd 100%); margin: 3px auto; border-radius: 5px; border: 2px solid #333; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); box-sizing: border-box;">{disk_label}{badge}</div>"""
+    # Create draggable disk with data attributes
+    disk_id = f"disk_{peg_idx}_{height}_{disk_size}"
+    return f"""<div id="{disk_id}" draggable="true" ondragstart="window.parent.postMessage({{type: 'dragstart', disk: {disk_size}, peg: {peg_idx}, height: {height}, count: {duplicate_count}}}, '*')" style="width: {width_percent}%; height: 30px; background: linear-gradient(135deg, {color} 0%, {color}dd 100%); margin: 3px auto; border-radius: 5px; border: 2px solid #333; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); box-sizing: border-box; cursor: move;">{disk_size}{badge}</div>"""
 
-def render_peg_graphical(peg_data: List[int], peg_name: str, max_disk: int):
-    """Render a single peg in graphical mode."""
+def render_peg_graphical(peg_data: List[int], peg_name: str, peg_idx: int, max_disk: int, duplicate_counts: dict):
+    """Render a single peg in graphical mode with drag-and-drop support."""
     st.markdown(f"### {peg_name}")
     
+    # Add drop zone with message passing
+    drop_handler = f"""
+    <script>
+        window.addEventListener('message', function(e) {{
+            if (e.data.type === 'drop' && e.data.targetPeg === {peg_idx}) {{
+                console.log('Drop on peg {peg_idx}:', e.data);
+                // Store in session storage for Python to read
+                sessionStorage.setItem('dropEvent', JSON.stringify(e.data));
+            }}
+        }});
+    </script>
+    """
+    
     if not peg_data:
-        st.markdown("""
-        <div style="
-            height: 200px;
-            border: 2px dashed #ccc;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #999;
-        ">
-            Empty
-        </div>
-        """, unsafe_allow_html=True)
+        empty_html = f"""{drop_handler}<div ondrop="window.parent.postMessage({{type: 'drop', targetPeg: {peg_idx}}}, '*'); event.preventDefault();" ondragover="event.preventDefault();" style="height: 200px; border: 2px dashed #ccc; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #999;">Empty</div>"""
+        st.markdown(empty_html, unsafe_allow_html=True)
     else:
         # Render disks from top to bottom for visual display
         # peg_data is stored [bottom, ..., top] e.g., [3, 2, 1]
-        # We iterate in reverse so disk 1 renders first (at top), disk 3 renders last (at bottom)
-        disk_bars = ''.join([create_disk_bar(disk, max_disk, disk - 1) for disk in reversed(peg_data)])
-        html_content = f'<div style="min-height: 200px; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end;">{disk_bars}</div>'
+        # Merge consecutive duplicate disks - show as single bar with badge
+        disk_bars = []
+        seen = set()
+        for i, disk in enumerate(reversed(peg_data)):
+            if disk not in seen:
+                seen.add(disk)
+                disk_bars.append(create_disk_bar(disk, max_disk, disk - 1, peg_idx, len(peg_data) - 1 - i, duplicate_counts.get(disk, 1)))
+        
+        html_content = f'{drop_handler}<div ondrop="window.parent.postMessage({{type: \'drop\', targetPeg: {peg_idx}}}, \'*\'); event.preventDefault();" ondragover="event.preventDefault();" style="min-height: 200px; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end;">{"".join(disk_bars)}</div>'
         st.markdown(html_content, unsafe_allow_html=True)
 
 def render_peg_text(peg_data: List[int], peg_name: str):
@@ -298,20 +347,19 @@ def visualize_state(mode: str = 'graphical'):
     all_disks = [d for peg in state for d in peg]
     max_disk = max(all_disks) if all_disks else 1
     
+    # Count duplicates
+    duplicate_counts = count_disk_duplicates(state)
+    
     if mode == 'graphical':
         # Create 5 columns for the 5 pegs
         col1, col2, col3, col4, col5 = st.columns(5)
         
-        with col1:
-            render_peg_graphical(state[0], "Peg A", max_disk)
-        with col2:
-            render_peg_graphical(state[1], "Peg B", max_disk)
-        with col3:
-            render_peg_graphical(state[2], "Peg C", max_disk)
-        with col4:
-            render_peg_graphical(state[3], "Queue", max_disk)
-        with col5:
-            render_peg_graphical(state[4], "Ground", max_disk)
+        peg_names = ["Peg A", "Peg B", "Peg C", "Queue", "Ground"]
+        columns = [col1, col2, col3, col4, col5]
+        
+        for idx, (col, peg_name) in enumerate(zip(columns, peg_names)):
+            with col:
+                render_peg_graphical(state[idx], peg_name, idx, max_disk, duplicate_counts)
     else:
         # Text mode
         st.markdown("#### Current State")
@@ -374,7 +422,7 @@ def main():
             "Illegal Resolution",
             options=['bubble_sort', 'total_evacuation', 'dig_out', 'bfs_3peg', 'bfs_4peg'],
             index=['bubble_sort', 'total_evacuation', 'dig_out', 'bfs_3peg', 'bfs_4peg'].index(
-                st.session_state.flags['illegal_resolution']
+                st.session_state.flags.get('illegal_resolution', 'bfs_3peg')
             ),
             help="Algorithm for fixing illegal stacking"
         )
@@ -384,6 +432,43 @@ def main():
         
         # Disk Controls
         st.subheader("Disk Management")
+        
+        # Drag-and-drop instructions
+        with st.expander("🖱️ Drag-and-Drop Mode", expanded=False):
+            st.markdown("""
+            **Developer Tool - No Rule Enforcement**
+            
+            In graphical mode, merged duplicate disks move together:
+            - Duplicates display as single disk with ×N badge
+            - Dragging moves ALL copies together as one unit
+            - Manual moves clear the solution
+            - Multiple moves recorded for each disk moved
+            
+            Use manual controls below for precise editing.
+            """)
+        
+        # Manual move controls
+        st.markdown("**Manual Move (No Rules):**")
+        col_src, col_dst = st.columns(2)
+        with col_src:
+            move_from = st.selectbox("From Peg", ['A', 'B', 'C', 'Queue', 'Ground'], key='manual_from')
+        with col_dst:
+            move_to = st.selectbox("To Peg", ['A', 'B', 'C', 'Queue', 'Ground'], key='manual_to')
+        
+        if st.button("↔️ Move Top Disk", use_container_width=True):
+            from_idx = ['A', 'B', 'C', 'Queue', 'Ground'].index(move_from)
+            to_idx = ['A', 'B', 'C', 'Queue', 'Ground'].index(move_to)
+            if st.session_state.current_state[from_idx]:
+                # Get the top disk value - all duplicates will move together
+                disk = st.session_state.current_state[from_idx][-1]
+                duplicate_counts = count_disk_duplicates(st.session_state.current_state)
+                count = duplicate_counts.get(disk, 1)
+                manual_move_disk(from_idx, to_idx, disk, count)
+                st.rerun()
+            else:
+                st.warning("Source peg is empty!")
+        
+        st.divider()
         
         if st.button("🎲 Randomize State", use_container_width=True):
             num_disks = st.session_state.get('random_disk_count', 5)
@@ -502,16 +587,36 @@ def main():
         # Show current move details
         if 0 < st.session_state.current_move_index <= len(st.session_state.solution_moves):
             current_move = st.session_state.solution_moves[st.session_state.current_move_index - 1]
-            st.info(f"📍 Last Move: Disk {current_move.disk} from {current_move.initial_peg} (height {current_move.initial_height}) → {current_move.destination_peg} (height {current_move.destination_height})")
+            # Compact notation: "3: A₂ → C₀"
+            subscript = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+            src_height = str(current_move.initial_height).translate(subscript)
+            dst_height = str(current_move.destination_height).translate(subscript)
+            compact = f"{current_move.disk}: {current_move.initial_peg}{src_height} → {current_move.destination_peg}{dst_height}"
+            st.info(f"📍 Last Move: {compact}")
     
     # ==========================================
     # Move History & Analysis
     # ==========================================
     
+    # Manual moves history
+    if st.session_state.manual_moves:
+        with st.expander("🖱️ Manual Move History", expanded=False):
+            subscript = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+            for i, move in enumerate(st.session_state.manual_moves, 1):
+                src_height = str(move.initial_height).translate(subscript)
+                dst_height = str(move.destination_height).translate(subscript)
+                compact = f"{move.disk}: {move.initial_peg}{src_height} → {move.destination_peg}{dst_height}"
+                st.text(f"{i:3d}. {compact}")
+    
     if has_solution:
         with st.expander("📜 View Full Solution", expanded=False):
+            # Use compact notation for move list
+            subscript = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
             for i, move in enumerate(st.session_state.solution_moves, 1):
-                st.text(f"{i:3d}. {move}")
+                src_height = str(move.initial_height).translate(subscript)
+                dst_height = str(move.destination_height).translate(subscript)
+                compact = f"{move.disk}: {move.initial_peg}{src_height} → {move.destination_peg}{dst_height}"
+                st.text(f"{i:3d}. {compact}")
         
         with st.expander("📊 Solution Analytics", expanded=False):
             col1, col2, col3 = st.columns(3)

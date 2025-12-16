@@ -28,8 +28,8 @@ initial_state = [
 flags = {
     'target_peg': 2,                      # 0=A, 1=B, 2=C
     'duplicate_strategy': 'merge',        # 'merge' or 'discard'
-    'ground_strategy': 'greedy',          # 'greedy' or 'patient'
-    'illegal_resolution': 'dig_out'       # See STRATEGIES below
+    'ground_strategy': 'greedy_3',        # 'greedy_3', 'greedy_4', 'patient_3', 'patient_4'
+    'illegal_resolution': 'bfs_3peg'      # See STRATEGIES below
 }
 
 # Solve the puzzle
@@ -61,12 +61,12 @@ The input is a list of 5 lists: [Peg A, Peg B, Peg C, Queue Peg, Ground]
 - 'greedy': Always place largest ground disk with minimum violation
 - 'patient': Only move ground disk when a legal placement exists
 
-### illegal_resolution (str, default: 'dig_out')
+### illegal_resolution (str, default: 'bfs_3peg')
 Available strategies for fixing illegal stacking:
 - 'bubble_sort': Fix by swapping adjacent illegally ordered disks
 - 'total_evacuation': Clear entire illegal peg and redistribute
-- 'dig_out': Surgical fix targeting first illegal overlap (recommended)
-- 'bfs_3peg': BFS pathfinding using only 3 standard pegs
+- 'dig_out': Surgical fix targeting first illegal overlap
+- 'bfs_3peg': BFS pathfinding using only 3 standard pegs (default, recommended)
 - 'bfs_4peg': BFS pathfinding with Queue peg assistance
 
 ## Gap Disks:
@@ -277,6 +277,99 @@ def resolve_ground_disks(state: List[List[int]], ground_strategy: str) -> Tuple[
         )
     
     return moves, final_state
+
+
+# ==========================================
+# Duplicate Disk Consolidation
+# ==========================================
+
+def consolidate_duplicates(state: List[List[int]], disk_info: Dict) -> Tuple[List[Move], List[List[int]]]:
+    """
+    Consolidate duplicate disks onto the same peg when possible.
+    This runs after ground resolution and before illegal resolution.
+    
+    Strategy: For each original disk value that has duplicates, try to move
+    all instances to the same peg if it doesn't violate stacking rules.
+    
+    Args:
+        state: 5-array state [A, B, C, Queue, Ground]
+        disk_info: Dictionary with reverse_map from preprocessing
+    
+    Returns:
+        Tuple of (moves, updated_state)
+    """
+    from collections import defaultdict
+    
+    moves = []
+    current_state = [list(p) for p in state]
+    
+    # Group normalized disk IDs by their original value
+    original_groups = defaultdict(list)
+    for normalized_id, (original_value, disk_id) in disk_info.get('reverse_map', {}).items():
+        original_groups[original_value].append(normalized_id)
+    
+    # Process each group of duplicates
+    for original_value, normalized_ids in original_groups.items():
+        if len(normalized_ids) <= 1:
+            continue  # Not a duplicate, skip
+        
+        # Find where these disks currently are
+        disk_locations = {}  # normalized_id -> (peg_idx, position)
+        for normalized_id in normalized_ids:
+            for peg_idx, peg in enumerate(current_state):
+                if normalized_id in peg:
+                    disk_locations[normalized_id] = peg_idx
+                    break
+        
+        # Find the peg with the most instances of this disk
+        peg_counts = defaultdict(int)
+        for peg_idx in disk_locations.values():
+            peg_counts[peg_idx] += 1
+        
+        if not peg_counts:
+            continue
+        
+        # Target peg is the one with most duplicates already (prefer consolidation)
+        target_peg = max(peg_counts.items(), key=lambda x: x[1])[0]
+        
+        # Try to move other instances to target peg
+        for normalized_id in normalized_ids:
+            source_peg = disk_locations.get(normalized_id)
+            if source_peg is None or source_peg == target_peg:
+                continue  # Already on target or not found
+            
+            # Check if move is legal (disk can go on top of target peg)
+            can_move = True
+            if current_state[target_peg]:
+                # Target peg is not empty, check if our disk is smaller than top
+                top_disk = current_state[target_peg][-1]
+                if normalized_id >= top_disk:
+                    can_move = False  # Would violate stacking
+            
+            # Also check if this disk is on top of its source peg
+            if can_move and current_state[source_peg]:
+                if current_state[source_peg][-1] != normalized_id:
+                    can_move = False  # Not on top, can't move
+            
+            if can_move:
+                # Execute the move
+                disk = current_state[source_peg].pop()
+                initial_height = len(current_state[source_peg])
+                
+                current_state[target_peg].append(disk)
+                destination_height = len(current_state[target_peg]) - 1
+                
+                peg_names = ['A', 'B', 'C', 'Queue', 'Ground']
+                move = Move(
+                    disk=disk,
+                    initial_peg=peg_names[source_peg],
+                    initial_height=initial_height,
+                    destination_peg=peg_names[target_peg],
+                    destination_height=destination_height
+                )
+                moves.append(move)
+    
+    return moves, current_state
 
 
 # ==========================================
@@ -506,7 +599,7 @@ def solve_hanoi(initial_state: List[List[int]], flags: Dict) -> List[Move]:
     target_peg = flags.get('target_peg', 2)
     duplicate_strategy = flags.get('duplicate_strategy', 'merge')
     ground_strategy = flags.get('ground_strategy', 'greedy_3')
-    illegal_resolution = flags.get('illegal_resolution', 'dig_out')
+    illegal_resolution = flags.get('illegal_resolution', 'bfs_3peg')
     
     # Validate target_peg
     if target_peg not in [0, 1, 2]:
@@ -522,6 +615,11 @@ def solve_hanoi(initial_state: List[List[int]], flags: Dict) -> List[Move]:
     if current_state[4]:  # Ground peg has disks
         ground_moves, current_state = resolve_ground_disks(current_state, ground_strategy)
         all_moves.extend(ground_moves)
+    
+    # Step 2.5: Consolidate duplicate disks onto same peg if possible
+    if disk_info['has_duplicates'] and duplicate_strategy == 'merge':
+        consolidation_moves, current_state = consolidate_duplicates(current_state, disk_info)
+        all_moves.extend(consolidation_moves)
     
     # Step 3: Resolve illegal stacking if present
     if not check_legality(current_state):
