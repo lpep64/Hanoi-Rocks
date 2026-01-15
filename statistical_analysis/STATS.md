@@ -389,7 +389,7 @@ MAX_MOVES = 10000  # Allow more moves before timeout
 - **Cause**: Python path not finding parent directories
 - **Solution**: Run from project root:
   ```bash
-  cd C:\Users\lukep\Documents\Hanoi-Rocks
+  cd C:\Users\lukep\Documents\Hanoi-Algorithms
   python -m statistical_analysis.run_tests
   ```
 
@@ -538,4 +538,4 @@ After running:
 
 **Last Updated**: November 30, 2025  
 **Version**: 1.0  
-**Author**: Statistical Analysis Framework for Hanoi-Rocks
+**Author**: Statistical Analysis Framework for Hanoi-Algorithms

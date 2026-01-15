@@ -1,4 +1,4 @@
-# Hanoi-Rocks 🗼
+# Hanoi-Algorithms 🗼
 
 **Advanced Tower of Hanoi Solver with Complex Variations**
 
@@ -7,6 +7,20 @@ A comprehensive research and application project for solving Tower of Hanoi puzz
 ---
 
 ## 🚀 Quick Start
+
+## 📦 Installation
+
+### Runtime
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### Development (editable)
+
+```bash
+python -m pip install -e ".[dev]"
+```
 
 ### Basic Usage
 
@@ -40,7 +54,7 @@ Visit `http://localhost:8501` for an interactive web interface with visual disk 
 ## 📁 Project Structure
 
 ```
-Hanoi-Rocks/
+Hanoi-Algorithms/
 ├── README.md                          # This file
 ├── hanoi_final.py                     # Standalone solver (no imports, fixed defaults)
 ├── hanoi_final_flag.py                # Full-featured master solver
@@ -170,7 +184,7 @@ moves = solve_hanoi(state, flags)
 ## 📦 Dependencies
 
 ```bash
-pip install streamlit plotly pytest
+python -m pip install -r requirements.txt
 ```
 
 ---

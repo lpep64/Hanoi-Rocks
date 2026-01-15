@@ -25,6 +25,7 @@ MANIFEST
 
 # Virtual Environment
 venv/
+.venv/
 env/
 ENV/
 env.bak/
@@ -49,6 +50,23 @@ htmlcov/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Streamlit
+.streamlit/
+
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# OS
+Thumbs.db
+desktop.ini
+
 # Project specific
+statistical_analysis/results.csv
+results.csv
 *.log
+*.tmp
 .env

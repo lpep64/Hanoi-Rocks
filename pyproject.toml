@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hanoi-algorithms"
+version = "1.0.0"
+description = "Advanced Tower of Hanoi solver with complex variations"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Hanoi-Algorithms contributors" }
+]
+keywords = ["hanoi", "tower-of-hanoi", "algorithms", "search", "dynamic-programming"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "streamlit>=1.32.0",
+  "plotly>=5.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "pytest-cov>=4",
+  "black>=24",
+  "isort>=5",
+  "flake8>=7",
+  "mypy>=1",
+]
+
+[tool.setuptools]
+packages = ["hanoi"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true
+warn_unused_ignores = true

@@ -1,5 +1,5 @@
 """
-Hanoi-Rocks: Advanced Tower of Hanoi Solver
+Hanoi-Algorithms: Advanced Tower of Hanoi Solver
 Handles complex variations including illegal states, ground disks, gaps, and duplicates.
 """
 
