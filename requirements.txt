@@ -2,8 +2,7 @@
 streamlit>=1.32.0
 plotly>=5.18.0
 
-# Testing
-pytest>=9.0.0
+# Note: test/dev dependencies are defined in pyproject.toml (extras) and installed in CI.
 
 # Already included in Python stdlib:
 # - typing
